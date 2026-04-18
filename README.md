@@ -26,6 +26,7 @@ Services:
 - Backend: `http://localhost:8080`
 - AI mock service: `http://localhost:8000`
 - MySQL: `localhost:3308`
+- React app: `http://localhost:5173`
 
 Run the React frontend separately:
 
@@ -38,6 +39,10 @@ npm run dev
 Frontend:
 
 - React app: `http://localhost:5173`
+
+The backend now uses Flyway for schema migration. The initial ticket table is created from:
+
+- `src/main/resources/db/migration/V1__create_tickets_table.sql`
 
 ## API endpoints
 
@@ -138,3 +143,4 @@ k6 run -e BASE_URL=http://localhost:8080 k6/ticket-flow.js
 ## Verification note
 
 `./gradlew test` has not been fully verified in this environment because Gradle wrapper distribution download is blocked by network restrictions.
+`docker compose config` can still be used to validate Compose syntax locally.
