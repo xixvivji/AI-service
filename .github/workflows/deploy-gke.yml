@@ -1,0 +1,95 @@
+name: Deploy to GKE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  BACKEND_IMAGE_NAME: ai-service-backend
+  FRONTEND_IMAGE_NAME: ai-service-frontend
+  AI_MOCK_IMAGE_NAME: ai-mock-service
+
+jobs:
+  deploy:
+    name: Build Images and Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Artifact Registry auth
+        run: gcloud auth configure-docker "${{ vars.ARTIFACT_REGISTRY_LOCATION }}-docker.pkg.dev" --quiet
+
+      - name: Build and push backend image
+        run: |
+          IMAGE="${{ vars.ARTIFACT_REGISTRY_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}/${BACKEND_IMAGE_NAME}:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "BACKEND_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Build and push frontend image
+        run: |
+          IMAGE="${{ vars.ARTIFACT_REGISTRY_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}/${FRONTEND_IMAGE_NAME}:${{ github.sha }}"
+          docker build -t "$IMAGE" ./frontend
+          docker push "$IMAGE"
+          echo "FRONTEND_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Build and push AI mock image
+        run: |
+          IMAGE="${{ vars.ARTIFACT_REGISTRY_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}/${AI_MOCK_IMAGE_NAME}:${{ github.sha }}"
+          docker build -t "$IMAGE" ./ai-mock-service
+          docker push "$IMAGE"
+          echo "AI_MOCK_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ vars.GKE_CLUSTER }}
+          location: ${{ vars.GKE_LOCATION }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Apply namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Apply production secret
+        run: |
+          kubectl create secret generic ai-service-secret \
+            --namespace ai-service \
+            --from-literal=DB_USERNAME="${{ secrets.DB_USERNAME }}" \
+            --from-literal=DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+            --from-literal=MYSQL_DATABASE="${{ secrets.MYSQL_DATABASE }}" \
+            --from-literal=MYSQL_USER="${{ secrets.MYSQL_USER }}" \
+            --from-literal=MYSQL_PASSWORD="${{ secrets.MYSQL_PASSWORD }}" \
+            --from-literal=MYSQL_ROOT_PASSWORD="${{ secrets.MYSQL_ROOT_PASSWORD }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -k k8s
+
+      - name: Update deployment images
+        run: |
+          kubectl set image deployment/ai-service-backend backend="$BACKEND_IMAGE" -n ai-service
+          kubectl set image deployment/ai-service-frontend frontend="$FRONTEND_IMAGE" -n ai-service
+          kubectl set image deployment/ai-mock-service ai-mock-service="$AI_MOCK_IMAGE" -n ai-service
+
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/ai-service-backend -n ai-service --timeout=180s
+          kubectl rollout status deployment/ai-service-frontend -n ai-service --timeout=180s
+          kubectl rollout status deployment/ai-mock-service -n ai-service --timeout=180s

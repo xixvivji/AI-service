@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service-frontend
+  namespace: ai-service
+spec:
+  selector:
+    app: ai-service-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

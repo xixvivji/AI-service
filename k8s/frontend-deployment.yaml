@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-service-frontend
+  namespace: ai-service
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-service-frontend
+  template:
+    metadata:
+      labels:
+        app: ai-service-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: YOUR_REGISTRY/ai-service-frontend:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: FRONTEND_API_UPSTREAM
+              value: http://ai-service-backend
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20

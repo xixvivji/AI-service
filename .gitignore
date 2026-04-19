@@ -1,8 +1,32 @@
-.gradle
-.gradle-local
-build
-out
-*.iml
+# OS / editor
 .DS_Store
-frontend/node_modules
-frontend/dist
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Logs
+*.log
+logs/
+
+# Java / Gradle
+.gradle/
+.gradle-local/
+build/
+out/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+application-local.properties
+src/main/resources/application-local.properties
+
+# Local Kubernetes secrets
+k8s/secret.yaml
+!k8s/secret.example.yaml

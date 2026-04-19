@@ -11,6 +11,7 @@ Spring Boot starter project for an AI-assisted customer support platform.
 - React frontend for ticket intake and queue inspection
 - Dockerfile for container image build
 - Kubernetes manifests for GKE deployment
+- GitHub Actions CI/CD workflow for GKE deployment
 - k6 load test scenario for API smoke/load testing
 
 ## Run locally
@@ -28,7 +29,7 @@ Services:
 - MySQL: `localhost:3308`
 - React app: `http://localhost:5173`
 
-Run the React frontend separately:
+For frontend-only development, run the React dev server separately:
 
 ```bash
 cd frontend
@@ -43,6 +44,8 @@ Frontend:
 The backend now uses Flyway for schema migration. The initial ticket table is created from:
 
 - `src/main/resources/db/migration/V1__create_tickets_table.sql`
+
+`application.properties` is safe to commit. Local secrets should be provided through environment variables, Docker Compose, GitHub Secrets, or a local-only `.env` file copied from `.env.example`.
 
 ## API endpoints
 
@@ -115,16 +118,32 @@ GKE-oriented manifests are under `k8s/` and include:
 - mysql deployment, service, and pvc
 - backend deployment, service, and hpa
 - ai-mock-service deployment, service, and hpa
+- frontend deployment, service, and hpa
 - ingress
 
 Apply in order:
 
 ```bash
+cp k8s/secret.example.yaml k8s/secret.yaml
+# edit k8s/secret.yaml before applying it
 kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/
+kubectl apply -f k8s/secret.yaml
+kubectl apply -k k8s/
 ```
 
-Before deploying to a real GKE cluster, replace the example secret values in `k8s/secret.yaml`.
+Do not commit `k8s/secret.yaml`. Commit only `k8s/secret.example.yaml`.
+
+## CI/CD
+
+GitHub Actions workflows are under `.github/workflows/`:
+
+- `ci.yml`: backend build/test, frontend build, Docker image build checks
+- `deploy-gke.yml`: build images, push to Artifact Registry, deploy to GKE, wait for rollout
+
+GKE CI/CD setup details are documented in:
+
+- `docs/gke-cicd.md`
+- `docs/roadmap.md`
 
 ## Load test
 
